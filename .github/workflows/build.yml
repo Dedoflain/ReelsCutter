@@ -1,0 +1,28 @@
+name: Build APK
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q ReelsCutter.zip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Vosk model
+        run: |
+          curl -L -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+          unzip -q model.zip
+          mkdir -p ReelsCutter/app/src/main/assets
+          mv vosk-model-small-ru-0.22 ReelsCutter/app/src/main/assets/model-ru
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build
+        working-directory: ReelsCutter
+        run: gradle assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReelsCutter-apk
+          path: ReelsCutter/app/build/outputs/apk/debug/app-debug.apk
