@@ -1,28 +1,54 @@
 name: Build APK
-on: [push, workflow_dispatch]
+on:
+  push:
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: unzip -q ReelsCutter.zip
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      - name: Vosk model
+
+      - name: Unzip project
+        run: unzip -q ReelsCutter.zip
+
+      - name: Download Vosk Russian model
+        working-directory: ReelsCutter
         run: |
           curl -L -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
           unzip -q model.zip
-          mkdir -p ReelsCutter/app/src/main/assets
-          mv vosk-model-small-ru-0.22 ReelsCutter/app/src/main/assets/model-ru
+          mkdir -p app/src/main/assets
+          mv vosk-model-small-ru-0.22 app/src/main/assets/model-ru
+          rm model.zip
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Build
+
+      - name: Build debug APK (full, then fallback)
+        shell: bash
         working-directory: ReelsCutter
-        run: gradle assembleDebug
+        run: |
+          set -o pipefail
+          if gradle assembleDebug -PwithAdvanced=true 2>&1 | tee ../build-full.log; then
+            echo "FULL BUILD OK"
+          else
+            echo "FULL BUILD FAILED, building basic"
+            gradle assembleDebug -PwithAdvanced=false 2>&1 | tee ../build-basic.log
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: ReelsCutter-apk
           path: ReelsCutter/app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-logs
+          path: build-*.log
